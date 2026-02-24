@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BudgetPro - 대시보드</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🎯 BudgetPro</h1>
+                <p id="teamMemberInfo" style="color: #7f8c8d; margin-top: 5px;"></p>
+            </div>
+            <button class="btn btn-danger" onclick="logout()">로그아웃</button>
+        </div>
+        
+        <!-- 탭 메뉴 -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('dashboard')">대시보드</button>
+            <button class="nav-tab" onclick="showTab('expenses')">지출관리</button>
+            <button class="nav-tab" onclick="showTab('members')">팀원관리</button>
+            <button class="nav-tab" onclick="showTab('settings')">설정</button>
+        </div>
+
+        <!-- 대시보드 탭 -->
+        <div id="dashboardTab" class="tab-content">
+            <!-- 예산 정보 카드 -->
+            <div class="grid grid-4 mb-20">
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                    <h3>누적 예산</h3>
+                    <div class="amount" id="totalBudget">0원</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                    <h3>현재 지출</h3>
+                    <div class="amount" id="totalExpense">0원</div>
+                    <small id="expenseBreakdown" style="font-size: 0.85rem; opacity: 0.9;"></small>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #2980b9, #1e6fa7);">
+                    <h3>잔여 예산</h3>
+                    <div class="amount" id="remainingBudget">0원</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #0f9b0f, #00b894);">
+                    <h3>잔여 예산 (부가세 제외)</h3>
+                    <div class="amount" id="remainingBudgetExcludingVAT">0원</div>
+                </div>
+            </div>
+
+            <!-- 현재 정보 -->
+            <div class="card">
+                <h3 class="card-title">현재 정보</h3>
+                <div class="grid grid-2">
+                    <div>
+                        <strong>현재 월:</strong> <span id="currentMonth"></span>
+                    </div>
+                    <div>
+                        <strong>예산 사이클:</strong> <span id="budgetCycle"></span>
+                    </div>
+                    <div>
+                        <strong>인별 할당액:</strong> <span id="perPersonBudget"></span>
+                    </div>
+                    <div>
+                        <strong>팀원 수:</strong> <span id="memberCount"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 팀원별 사용 내역 그래프 -->
+            <div class="card">
+                <h3 class="card-title">팀원별 사용 내역</h3>
+                <div class="chart-container">
+                    <canvas id="memberExpenseChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 지출관리 탭 -->
+        <div id="expensesTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="flex-between mb-20">
+                    <h3 class="card-title">지출 내역</h3>
+                    <button class="btn btn-primary" onclick="showAddExpenseModal()">+ 지출 추가</button>
+                </div>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>날짜</th>
+                            <th>팀원</th>
+                            <th>카테고리</th>
+                            <th>내용</th>
+                            <th>공급가액</th>
+                            <th>부가세</th>
+                            <th>합계</th>
+                            <th>액션</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenseList">
+                        <!-- 지출 내역이 동적으로 로드됩니다 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 팀원관리 탭 -->
+        <div id="membersTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="flex-between mb-20">
+                    <h3 class="card-title">팀원 관리</h3>
+                    <button class="btn btn-primary" onclick="showAddMemberModal()">+ 팀원 추가</button>
+                </div>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>이름</th>
+                            <th>가입일</th>
+                            <th>액션</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberList">
+                        <!-- 팀원 목록이 동적으로 로드됩니다 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 설정 탭 -->
+        <div id="settingsTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <h3 class="card-title">데이터 관리</h3>
+                <div class="grid grid-3 gap-10">
+                    <button class="btn btn-primary" onclick="downloadData()">📥 데이터 다운로드</button>
+                    <button class="btn btn-success" onclick="document.getElementById('uploadFile').click()">📤 데이터 업로드</button>
+                    <button class="btn btn-danger" onclick="resetData()">🗑️ 지출 정보 초기화</button>
+                </div>
+                <input type="file" id="uploadFile" style="display: none;" accept=".json" onchange="uploadData(event)">
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">예산 설정</h3>
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label for="settingsPerPersonBudget">인별 할당액 (월)</label>
+                        <input type="number" id="settingsPerPersonBudget" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsResetCycle">초기화 주기</label>
+                        <select id="settingsResetCycle" class="form-control" required>
+                            <option value="monthly">월별</option>
+                            <option value="quarterly">분기별</option>
+                            <option value="half-yearly">반기별</option>
+                            <option value="yearly">연도별</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">설정 저장</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 지출 추가 모달 -->
+    <div class="modal" id="addExpenseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>지출 추가</h2>
+                <button class="close-btn" onclick="closeAddExpenseModal()">&times;</button>
+            </div>
+            <form id="addExpenseForm">
+                <div class="form-group">
+                    <label for="expenseAmount">지출액 (VAT 포함)</label>
+                    <input type="number" id="expenseAmount" class="form-control" placeholder="11000" required oninput="calculateVAT()">
+                    <small style="color: #7f8c8d; margin-top: 5px; display: block;">
+                        공급가액: <span id="supplyAmount">0</span>원 | 부가세(10%): <span id="vatAmount">0</span>원
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="expenseCategory">카테고리</label>
+                    <select id="expenseCategory" class="form-control" required>
+                        <option value="회식">회식</option>
+                        <option value="음료">음료</option>
+                        <option value="사무용품">사무용품</option>
+                        <option value="기타">기타</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="expenseDescription">지출 내용 (선택사항)</label>
+                    <textarea id="expenseDescription" class="form-control" rows="3" placeholder="지출 내용을 입력하세요"></textarea>
+                </div>
+                <div class="flex gap-10">
+                    <button type="submit" class="btn btn-primary">추가</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddExpenseModal()">취소</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 팀원 추가 모달 -->
+    <div class="modal" id="addMemberModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>팀원 추가</h2>
+                <button class="close-btn" onclick="closeAddMemberModal()">&times;</button>
+            </div>
+            <form id="addMemberForm">
+                <div class="form-group">
+                    <label for="memberName">팀원 이름</label>
+                    <input type="text" id="memberName" class="form-control" placeholder="이름을 입력하세요" required>
+                </div>
+                <div class="flex gap-10">
+                    <button type="submit" class="btn btn-primary">추가</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddMemberModal()">취소</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BudgetPro - 로그인</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 BudgetPro</h1>
+            <button class="btn btn-secondary" onclick="goBack()">← 팀 선택으로 돌아가기</button>
+        </div>
+        
+        <div class="card">
+            <h2 class="card-title text-center" id="teamTitle">팀원 선택</h2>
+            
+            <div class="member-grid" id="memberList">
+                <!-- 팀원 목록이 동적으로 로드됩니다 -->
+            </div>
+            
+            <div class="text-center mt-20" id="emptyMessageContainer" style="display: none;">
+                <p class="text-center" style="margin-bottom: 20px; color: #7f8c8d;">
+                    등록된 팀원이 없습니다. 관리자로 로그인하여 팀원을 추가해주세요.
+                </p>
+                <button class="btn btn-primary" onclick="loginAsAdmin()">관리자로 계속하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 선택된 팀 정보 가져오기
+        const teamId = localStorage.getItem('selectedTeamId');
+        const teamName = localStorage.getItem('selectedTeamName');
+
+        if (!teamId) {
+            alert('팀을 선택해주세요.');
+            window.location.href = '/';
+        }
+
+        // 팀 이름 표시
+        document.getElementById('teamTitle').textContent = `${teamName} - 팀원 선택`;
+
+        // 팀원 목록 로드
+        async function loadMembers() {
+            try {
+                const response = await fetch(`/api/members/${teamId}`);
+                const members = await response.json();
+                
+                const memberList = document.getElementById('memberList');
+                const emptyMessageContainer = document.getElementById('emptyMessageContainer');
+                memberList.innerHTML = '';
+                
+                if (members.length === 0) {
+                    memberList.style.display = 'none';
+                    emptyMessageContainer.style.display = 'block';
+                } else {
+                    memberList.style.display = 'grid';
+                    emptyMessageContainer.style.display = 'none';
+                    members.forEach(member => {
+                        const memberCard = document.createElement('div');
+                        memberCard.className = 'member-card';
+                        memberCard.onclick = () => login(member.id, member.name);
+                        memberCard.innerHTML = `
+                            <div style="font-size: 2rem; margin-bottom: 10px;">👤</div>
+                            <div><strong>${member.name}</strong></div>
+                        `;
+                        memberList.appendChild(memberCard);
+                    });
+                }
+            } catch (error) {
+                console.error('팀원 목록 로드 실패:', error);
+                // 에러가 발생해도 관리자로 로그인할 수 있도록 함
+                const memberList = document.getElementById('memberList');
+                const emptyMessageContainer = document.getElementById('emptyMessageContainer');
+                memberList.style.display = 'none';
+                emptyMessageContainer.style.display = 'block';
+            }
+        }
+
+        // 관리자로 로그인
+        async function loginAsAdmin() {
+            try {
+                // 관리자 ID를 'admin'으로 설정
+                localStorage.setItem('currentMemberId', 'admin');
+                localStorage.setItem('currentMemberName', '관리자');
+                localStorage.setItem('authToken', 'admin-token');
+                window.location.href = '/dashboard';
+            } catch (error) {
+                console.error('관리자 로그인 실패:', error);
+                alert('로그인 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 로그인
+        async function login(memberId, memberName) {
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        team_id: teamId,
+                        member_id: memberId
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('currentMemberId', memberId);
+                    localStorage.setItem('currentMemberName', memberName);
+                    localStorage.setItem('authToken', data.token || 'dummy-token');
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('로그인에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('로그인 실패:', error);
+                alert('로그인 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 뒤로 가기
+        function goBack() {
+            localStorage.removeItem('selectedTeamId');
+            localStorage.removeItem('selectedTeamName');
+            window.location.href = '/';
+        }
+
+        // 페이지 로드 시 팀원 목록 로드
+        loadMembers();
+    </script>
+</body>
+</html>

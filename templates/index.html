@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BudgetPro - 팀 선택</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 BudgetPro</h1>
+        </div>
+        
+        <div class="card">
+            <div class="flex-between mb-20">
+                <h2 class="card-title">팀 선택</h2>
+                <button class="btn btn-primary" onclick="showAddTeamModal()">+ 새 팀 추가</button>
+            </div>
+            
+            <div class="team-list" id="teamList">
+                <!-- 팀 목록이 동적으로 로드됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 팀 추가 모달 -->
+    <div class="modal" id="addTeamModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>새 팀 추가</h2>
+                <button class="close-btn" onclick="closeAddTeamModal()">&times;</button>
+            </div>
+            <form id="addTeamForm">
+                <div class="form-group">
+                    <label for="teamName">팀 이름</label>
+                    <input type="text" id="teamName" class="form-control" placeholder="팀 이름을 입력하세요" required>
+                </div>
+                <div class="form-group">
+                    <label for="perPersonBudget">인별 할당액 (월)</label>
+                    <input type="number" id="perPersonBudget" class="form-control" placeholder="100000" required>
+                </div>
+                <div class="form-group">
+                    <label for="resetCycle">예산 초기화 주기</label>
+                    <select id="resetCycle" class="form-control" required>
+                        <option value="monthly">월별</option>
+                        <option value="quarterly">분기별</option>
+                        <option value="half-yearly">반기별</option>
+                        <option value="yearly">연도별</option>
+                    </select>
+                </div>
+                <div class="flex gap-10">
+                    <button type="submit" class="btn btn-primary">생성</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTeamModal()">취소</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 페이지 로드 시 팀 목록 가져오기
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/teams');
+                const teams = await response.json();
+                
+                const teamList = document.getElementById('teamList');
+                teamList.innerHTML = '';
+                
+                if (teams.length === 0) {
+                    teamList.innerHTML = '<p class="text-center">등록된 팀이 없습니다. 새 팀을 추가해주세요.</p>';
+                } else {
+                    teams.forEach(team => {
+                        const teamCard = document.createElement('div');
+                        teamCard.className = 'team-card';
+                        teamCard.style.position = 'relative';
+                        teamCard.innerHTML = `
+                            <button class="btn btn-danger" onclick="event.stopPropagation(); deleteTeam('${team.id}', '${team.name}')" style="position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; min-width: auto;">×</button>
+                            <div onclick="selectTeam('${team.id}', '${team.name}')" style="cursor: pointer; padding-right: 30px;">
+                                <h3>${team.name}</h3>
+                                <p>팀원 ${team.members?.length || 0}명</p>
+                                <p>인별 할당액: ${team.per_person_amount?.toLocaleString() || 0}원</p>
+                            </div>
+                        `;
+                        teamList.appendChild(teamCard);
+                    });
+                }
+            } catch (error) {
+                console.error('팀 목록 로드 실패:', error);
+                alert('팀 목록을 불러오는데 실패했습니다.');
+            }
+        }
+
+        // 팀 선택
+        function selectTeam(teamId, teamName) {
+            localStorage.setItem('selectedTeamId', teamId);
+            localStorage.setItem('selectedTeamName', teamName);
+            window.location.href = '/login';
+        }
+
+        // 팀 추가 모달 열기
+        function showAddTeamModal() {
+            document.getElementById('addTeamModal').classList.add('active');
+        }
+
+        // 팀 추가 모달 닫기
+        function closeAddTeamModal() {
+            document.getElementById('addTeamModal').classList.remove('active');
+            document.getElementById('addTeamForm').reset();
+        }
+
+        // 팀 추가 폼 제출
+        document.getElementById('addTeamForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const teamData = {
+                name: document.getElementById('teamName').value,
+                per_person_amount: parseInt(document.getElementById('perPersonBudget').value),
+                budget_cycle: document.getElementById('resetCycle').value
+            };
+            
+            try {
+                const response = await fetch('/api/teams', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(teamData)
+                });
+                
+                if (response.ok) {
+                    closeAddTeamModal();
+                    loadTeams();
+                    alert('팀이 성공적으로 생성되었습니다.');
+                } else {
+                    const error = await response.json();
+                    alert('팀 생성 실패: ' + (error.detail || '알 수 없는 오류'));
+                }
+            } catch (error) {
+                console.error('팀 생성 실패:', error);
+                alert('팀 생성 중 오류가 발생했습니다.');
+            }
+        });
+
+        // 팀 삭제
+        async function deleteTeam(teamId, teamName) {
+            if (!confirm(`"${teamName}" 팀을 삭제하시겠습니까?\n\n⚠️ 팀과 관련된 모든 데이터(팀원, 지출 내역)가 삭제됩니다.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/teams/${teamId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('팀이 삭제되었습니다.');
+                    loadTeams();
+                } else {
+                    const error = await response.json();
+                    alert('팀 삭제 실패: ' + (error.detail || '알 수 없는 오류'));
+                }
+            } catch (error) {
+                console.error('팀 삭제 실패:', error);
+                alert('팀 삭제 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 페이지 로드 시 팀 목록 로드
+        loadTeams();
+    </script>
+</body>
+</html>

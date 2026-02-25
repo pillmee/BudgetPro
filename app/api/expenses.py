@@ -35,9 +35,18 @@ async def create_expense(expense_data: ExpenseCreate):
     if not team:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
     
+    if expense_data.member_id == "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="관리자 모드에서는 지출을 등록할 수 없습니다. 팀원을 추가한 뒤 팀원으로 로그인해주세요."
+        )
+
     member = get_member_by_id(expense_data.team_id, expense_data.member_id)
     if not member:
-        raise HTTPException(status_code=404, detail="팀원을 찾을 수 없습니다.")
+        raise HTTPException(
+            status_code=404,
+            detail="선택된 팀원을 찾을 수 없습니다. 다시 로그인 후 시도해주세요."
+        )
     
     # 공급가액과 부가세 계산
     # 총액 = 공급가액 + 부가세(10%)

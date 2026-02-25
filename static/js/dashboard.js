@@ -236,6 +236,11 @@ function closeAddExpenseModal() {
 // 지출 추가
 document.getElementById('addExpenseForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    if (memberId === 'admin') {
+        alert('관리자 모드에서는 지출을 등록할 수 없습니다. 팀원을 추가한 뒤 팀원으로 로그인해주세요.');
+        return;
+    }
     
     const totalAmount = parseInt(document.getElementById('expenseAmount').value);
     
@@ -262,7 +267,9 @@ document.getElementById('addExpenseForm').addEventListener('submit', async (e) =
             loadDashboardData();
             alert('지출이 추가되었습니다.');
         } else {
-            alert('지출 추가에 실패했습니다.');
+            const error = await response.json().catch(() => ({}));
+            const errorMessage = error.detail || '지출 추가에 실패했습니다.';
+            alert(errorMessage);
         }
     } catch (error) {
         console.error('지출 추가 실패:', error);

@@ -58,36 +58,24 @@ function logout() {
 // 대시보드 데이터 로드
 async function loadDashboardData() {
     try {
-        // 팀 정보 가져오기
-        const teamResponse = await fetch(`/api/teams/${teamId}`);
+        const [dashboardResponse, teamResponse] = await Promise.all([
+            fetch(`/api/auth/dashboard/${teamId}`),
+            fetch(`/api/teams/${teamId}`)
+        ]);
+
+        if (!dashboardResponse.ok || !teamResponse.ok) {
+            throw new Error('대시보드 정보를 불러오는데 실패했습니다.');
+        }
+
+        const dashboard = await dashboardResponse.json();
         const team = await teamResponse.json();
-        
-        // 지출 내역 가져오기
-        const expenseResponse = await fetch(`/api/expenses?team_id=${teamId}`);
-        const expenses = await expenseResponse.json();
-        
-        // 팀원 목록 가져오기
-        const membersResponse = await fetch(`/api/members/${teamId}`);
-        const members = await membersResponse.json();
-        
-        // 예산 계산
-        const memberCount = members.length || 1; // 팀원이 없으면 1로 계산
-        const perPersonBudget = team.per_person_amount || 0;
-        const totalBudget = perPersonBudget * memberCount;
-        
-        // 지출 총액 계산
-        let totalExpense = 0;
-        let totalSupply = 0;
-        let totalVAT = 0;
-        
-        expenses.forEach(expense => {
-            totalExpense += expense.total_amount || 0;
-            totalSupply += expense.supply_amount || 0;
-            totalVAT += expense.vat || 0;
-        });
-        
-        const remainingBudget = totalBudget - totalExpense;
-        const remainingBudgetExcludingVAT = totalBudget - totalSupply;
+
+        const totalBudget = dashboard.accumulated_budget || 0;
+        const totalExpense = dashboard.total_spent || 0;
+        const totalSupply = dashboard.supply_amount_spent || 0;
+        const totalVAT = dashboard.vat_spent || 0;
+        const remainingBudget = dashboard.remaining_budget || 0;
+        const remainingBudgetExcludingVAT = dashboard.remaining_budget_without_vat || 0;
         
         // 화면에 표시
         document.getElementById('totalBudget').textContent = totalBudget.toLocaleString() + '원';
@@ -98,14 +86,13 @@ async function loadDashboardData() {
         document.getElementById('remainingBudgetExcludingVAT').textContent = remainingBudgetExcludingVAT.toLocaleString() + '원';
         
         // 현재 정보
-        const now = new Date();
-        document.getElementById('currentMonth').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월`;
-        document.getElementById('budgetCycle').textContent = getCycleText(team.budget_cycle);
-        document.getElementById('perPersonBudget').textContent = perPersonBudget.toLocaleString() + '원';
-        document.getElementById('memberCount').textContent = (members.length || 0) + '명';
+        document.getElementById('currentMonth').textContent = dashboard.current_month || '-';
+        document.getElementById('budgetCycle').textContent = dashboard.budget_cycle_info || getCycleText(team.budget_cycle);
+        document.getElementById('perPersonBudget').textContent = (team.per_person_amount || 0).toLocaleString() + '원';
+        document.getElementById('memberCount').textContent = ((team.members || []).length || 0) + '명';
         
         // 팀원별 지출 그래프
-        drawMemberExpenseChart(members, expenses);
+        drawMemberExpenseChart(dashboard.member_expenses || []);
         
     } catch (error) {
         console.error('대시보드 데이터 로드 실패:', error);
@@ -125,11 +112,11 @@ function getCycleText(cycle) {
 }
 
 // 팀원별 지출 그래프 그리기
-function drawMemberExpenseChart(members, expenses) {
+function drawMemberExpenseChart(memberExpenses) {
     const ctx = document.getElementById('memberExpenseChart');
     
     // 팀원이 없는 경우 처리
-    if (members.length === 0) {
+    if (memberExpenses.length === 0) {
         // 기존 차트 제거
         if (chart) {
             chart.destroy();
@@ -143,26 +130,11 @@ function drawMemberExpenseChart(members, expenses) {
     if (!ctx || ctx.tagName !== 'CANVAS') {
         const container = document.querySelector('.chart-container');
         container.innerHTML = '<canvas id="memberExpenseChart"></canvas>';
-        return drawMemberExpenseChart(members, expenses);
+        return drawMemberExpenseChart(memberExpenses);
     }
     
-    // 팀원별 지출 집계
-    const memberExpenseMap = {};
-    members.forEach(member => {
-        memberExpenseMap[member.id] = {
-            name: member.name,
-            total: 0
-        };
-    });
-    
-    expenses.forEach(expense => {
-        if (memberExpenseMap[expense.member_id]) {
-            memberExpenseMap[expense.member_id].total += expense.total_amount || 0;
-        }
-    });
-    
-    const labels = Object.values(memberExpenseMap).map(m => m.name);
-    const data = Object.values(memberExpenseMap).map(m => m.total);
+    const labels = memberExpenses.map(item => item.name);
+    const data = memberExpenses.map(item => item.amount || 0);
     
     // 기존 차트 제거
     if (chart) {
@@ -242,7 +214,7 @@ async function loadExpenses() {
 // VAT 계산
 function calculateVAT() {
     const totalAmount = parseFloat(document.getElementById('expenseAmount').value) || 0;
-    const supplyAmount = Math.round(totalAmount / 1.1);
+    const supplyAmount = Math.floor(totalAmount / 1.1);
     const vatAmount = totalAmount - supplyAmount;
     
     document.getElementById('supplyAmount').textContent = supplyAmount.toLocaleString();
@@ -340,6 +312,7 @@ async function loadMembers() {
                     <td><strong>${member.name}</strong></td>
                     <td>${member.created_at ? new Date(member.created_at).toLocaleDateString() : '-'}</td>
                     <td>
+                        <button class="btn btn-warning" onclick="updateMember('${member.id}', '${member.name.replace(/'/g, "\\'")}')" style="padding: 5px 10px; font-size: 0.9rem; margin-right: 6px;">수정</button>
                         <button class="btn btn-danger" onclick="deleteMember('${member.id}')" style="padding: 5px 10px; font-size: 0.9rem;">삭제</button>
                     </td>
                 `;
@@ -418,6 +391,42 @@ async function deleteMember(memberId) {
     }
 }
 
+// 팀원 수정
+async function updateMember(memberId, currentName) {
+    const newName = prompt('새 팀원 이름을 입력하세요.', currentName);
+    if (!newName) {
+        return;
+    }
+
+    const trimmedName = newName.trim();
+    if (!trimmedName || trimmedName === currentName) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/members/${teamId}/${memberId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: trimmedName })
+        });
+
+        if (response.ok) {
+            alert('팀원 정보가 수정되었습니다.');
+            loadMembers();
+            loadDashboardData();
+            return;
+        }
+
+        const error = await response.json();
+        alert('수정에 실패했습니다: ' + (error.detail || '알 수 없는 오류'));
+    } catch (error) {
+        console.error('팀원 수정 실패:', error);
+        alert('수정 중 오류가 발생했습니다.');
+    }
+}
+
 // 설정 로드
 async function loadSettings() {
     try {
@@ -469,13 +478,19 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
 async function downloadData() {
     try {
         const response = await fetch(`/api/settings/${teamId}/download-expenses`);
-        const data = await response.json();
-        
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        if (!response.ok) {
+            throw new Error('데이터 다운로드 실패');
+        }
+
+        const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `budgetpro_${teamName}_${new Date().toISOString().split('T')[0]}.json`;
+
+        const contentDisposition = response.headers.get('content-disposition') || '';
+        const filenameMatch = contentDisposition.match(/filename="?([^\"]+)"?/);
+        a.download = filenameMatch ? filenameMatch[1] : `budgetpro_${teamName}_${new Date().toISOString().split('T')[0]}.json`;
+
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

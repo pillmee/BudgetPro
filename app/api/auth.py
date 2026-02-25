@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 import uuid
 from app.models import LoginRequest, LoginResponse, Dashboard
-from app.utils import get_team_by_id, get_member_by_id, load_expenses
+from app.utils import get_team_by_id, get_member_by_id, load_expenses, save_expenses, load_teams, save_teams
+from app.budget_calculator import should_reset_budget, calculate_accumulated_budget, get_cycle_info
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
 router = APIRouter()
 
@@ -34,31 +34,31 @@ async def login(login_data: LoginRequest):
 @router.get("/dashboard/{team_id}", response_model=Dashboard)
 async def get_dashboard(team_id: str):
     """대시보드 데이터 조회"""
-    # 팀 확인
-    team = get_team_by_id(team_id)
-    if not team:
+    teams = load_teams()
+    team_index = None
+    for i, saved_team in enumerate(teams):
+        if saved_team.id == team_id:
+            team_index = i
+            break
+
+    if team_index is None:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
-    
-    # 현재 사이클 시작일 계산
+
+    team = teams[team_index]
+
+    # 주기/연말 기준 자동 초기화
+    if should_reset_budget(team):
+        expenses = load_expenses()
+        expenses = [e for e in expenses if e.team_id != team_id]
+        save_expenses(expenses)
+
+        teams[team_index].last_reset_date = datetime.now()
+        save_teams(teams)
+        team = teams[team_index]
+
     current_date = datetime.now()
-    cycle_start_date = team.last_reset_date
-    
-    # 사이클에 따른 월 수 계산
-    if team.budget_cycle == "monthly":
-        months_diff = (current_date.year - cycle_start_date.year) * 12 + (current_date.month - cycle_start_date.month)
-        cycle_info = f"{current_date.strftime('%Y년 %m월')}"
-    elif team.budget_cycle == "quarterly":
-        months_diff = (current_date.year - cycle_start_date.year) * 12 + (current_date.month - cycle_start_date.month)
-        cycle_info = f"{current_date.year}년 {(current_date.month - 1) // 3 + 1}분기"
-    elif team.budget_cycle == "semi_annual":
-        months_diff = (current_date.year - cycle_start_date.year) * 12 + (current_date.month - cycle_start_date.month)
-        cycle_info = f"{current_date.year}년 {'상반기' if current_date.month <= 6 else '하반기'}"
-    else:  # annual
-        months_diff = (current_date.year - cycle_start_date.year) * 12 + (current_date.month - cycle_start_date.month)
-        cycle_info = f"{current_date.year}년"
-    
-    # 누적 예산 계산 (시작일부터 현재까지 매월 누적)
-    accumulated_budget = team.per_person_amount * len(team.members) * (months_diff + 1)
+    cycle_info = get_cycle_info(team)
+    accumulated_budget = calculate_accumulated_budget(team)
     
     # 현재 사이클의 지출 내역 조회
     expenses = load_expenses()

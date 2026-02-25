@@ -75,6 +75,7 @@
                         teamCard.className = 'team-card';
                         teamCard.style.position = 'relative';
                         teamCard.innerHTML = `
+                            <button class="btn btn-warning" onclick="event.stopPropagation(); updateTeam('${team.id}', '${team.name.replace(/'/g, "\\'")}')" style="position: absolute; top: 10px; right: 52px; padding: 4px 8px; font-size: 0.8rem; min-width: auto;">✎</button>
                             <button class="btn btn-danger" onclick="event.stopPropagation(); deleteTeam('${team.id}', '${team.name}')" style="position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; min-width: auto;">×</button>
                             <div onclick="selectTeam('${team.id}', '${team.name}')" style="cursor: pointer; padding-right: 30px;">
                                 <h3>${team.name}</h3>
@@ -163,6 +164,40 @@
             } catch (error) {
                 console.error('팀 삭제 실패:', error);
                 alert('팀 삭제 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 팀 수정
+        async function updateTeam(teamId, currentName) {
+            const newName = prompt('새 팀 이름을 입력하세요.', currentName);
+            if (!newName) {
+                return;
+            }
+
+            const trimmedName = newName.trim();
+            if (!trimmedName || trimmedName === currentName) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/teams/${teamId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: trimmedName })
+                });
+
+                if (response.ok) {
+                    alert('팀 정보가 수정되었습니다.');
+                    loadTeams();
+                } else {
+                    const error = await response.json();
+                    alert('팀 수정 실패: ' + (error.detail || '알 수 없는 오류'));
+                }
+            } catch (error) {
+                console.error('팀 수정 실패:', error);
+                alert('팀 수정 중 오류가 발생했습니다.');
             }
         }
 

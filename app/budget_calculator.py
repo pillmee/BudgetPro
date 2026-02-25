@@ -35,22 +35,9 @@ def should_reset_budget(team: Team) -> bool:
 def calculate_accumulated_budget(team: Team) -> int:
     """누적 예산 계산"""
     current_date = datetime.now()
-    start_date = team.last_reset_date
-    year_start = datetime(current_date.year, 1, 1)
-
-    # 명세: 예산 누적은 매년 1월부터 시작
-    if start_date < year_start:
-        start_date = year_start
-    
-    # 시작일부터 현재까지의 월 수 계산
-    months_diff = (current_date.year - start_date.year) * 12 + (current_date.month - start_date.month)
-    
-    # 안전장치: 미래 날짜 오입력 방지
-    if months_diff < 0:
-        months_diff = 0
-
-    # 매월 누적된 예산 계산
-    accumulated_budget = team.per_person_amount * len(team.members) * (months_diff + 1)
+    # 명세: 예산 누적은 매년 1월부터 현재 월까지 매월 누적
+    months_elapsed = current_date.month
+    accumulated_budget = team.per_person_amount * len(team.members) * months_elapsed
     
     return accumulated_budget
 

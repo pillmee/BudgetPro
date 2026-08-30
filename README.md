@@ -12,7 +12,7 @@
 - 지출 등록 시 공급가액/부가세(10%) 자동 계산
 - 예산 주기 설정: 월/분기/반기/연
 - 팀별 지출 JSON 다운로드/업로드
-- JSON 파일 기반 저장(`data/teams.json`, `data/expenses.json`)
+- SQLite 기반 저장(`data/budgetpro.db`), 기존 `data/teams.json` / `data/expenses.json`이 있으면 최초 실행 시 자동 이전
 
 ## 빠른 시작
 
@@ -129,6 +129,6 @@ BudgetPro/
 
 ## 운영 시 참고
 
-- 현재 저장소는 JSON 파일 저장 방식입니다. 운영 환경에서는 DB 사용을 권장합니다.
+- 현재 저장소는 SQLite(`data/budgetpro.db`)입니다. 트래픽이 커지면 PostgreSQL 등으로 교체를 검토하세요.
 - 인증 토큰은 UUID 기반의 단순 구현입니다. 운영 환경에서는 JWT 등으로 교체하세요.
 - CORS가 전체 허용(`*`)으로 설정되어 있으므로 운영 환경에서는 제한이 필요합니다.
